@@ -291,18 +291,30 @@ module.exports = {
 		},
 		createImage: {
 			async handler(ctx) {
-				// Use adapter directly to find records
-				const { Op } = require('sequelize');
-				const path = require('path');
+				const path = require("path");
+				const fs = require("fs");
+				const { Op } = require("sequelize");
 				const model = this.adapter.db.models.imagery;
+				const numberModel = this.adapter.db.models.numberTable;
 				let dbImage = await model.findOne({where: {processed: 0}});
 				
 				if (!dbImage) {
-					console.log("All numbers PROCESSED!");
+					console.log("All images PROCESSED!");
 					return 0;
 				}
 				
 				const plainImage = dbImage.get({ plain: true });
+				
+				const requiredNumbers = [plainImage.id, plainImage.con1, plainImage.con2, plainImage.con3, plainImage.con4];
+				
+				for (const num of requiredNumbers) {
+					if (!num) continue;
+					const numPath = path.resolve(`${allNumbersDir}${num}.png`);
+					if (!fs.existsSync(numPath)) {
+						console.log(`Creating number ${num} first...`);
+						await this.createNumberImageDirect(num);
+					}
+				}
 				
 				console.log(plainImage.id, "STARTED");
 				
@@ -569,6 +581,33 @@ module.exports = {
 				return 400;
 			} else {
 				return 500;
+			}
+		},
+
+		async createNumberImageDirect(number) {
+			try {
+				let numberToPrint = this.makeFourDigits(number);
+				let firstNumber = Number(numberToPrint.substr(0, 1));
+
+				let jimpNumbers = [];
+				for (let i = 0; i < numberToPrint.length; i++) {
+					let targetNumber = Number(numberToPrint.substr(i, 1));
+					jimpNumbers.push(await jimp.read(fonts[targetNumber]));
+				}
+
+				let x = 0;
+				x += this.countSpacingX(firstNumber);
+				for (let i = 1; i <= numberToPrint.length - 1; i++) {
+					let targetNumber = Number(numberToPrint.substr(i, 1));
+					await jimpNumbers[0].composite(jimpNumbers[i], x, 0);
+					x += this.countSpacingX(targetNumber);
+				}
+				
+				const outputPath = require("path").resolve(`${distNumbers}${number}.png`);
+				await jimpNumbers[0].write(outputPath);
+				console.log(`Number ${number} created: ${outputPath}`);
+			} catch (e) {
+				console.error(`Error creating number ${number}:`, e.message);
 			}
 		},
 

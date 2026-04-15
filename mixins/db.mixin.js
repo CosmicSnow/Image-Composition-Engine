@@ -1,63 +1,36 @@
 "use strict";
 
-// import Sequelize from "sequelize";
 const Sequelize = require("sequelize");
-// const DbService = require("moleculer-db");
-const envConfig = require("../env.config");
-// const SqlAdapter = require("moleculer-db-adapter-sequelize");
-const MoleculerSequelize = require("moleculer-sequelize");
+const path = require("path");
+const DbService = require("moleculer-db");
+const SqlAdapter = require("moleculer-db-adapter-sequelize");
 const Op = Sequelize.Op;
 
+const dbPath = path.join(__dirname, "../dist/data/chimera.db");
+
+const adapter = new SqlAdapter({
+	dialect: "sqlite",
+	storage: dbPath,
+	logging: false
+});
+
+const sequelize = new Sequelize({
+	dialect: "sqlite",
+	storage: dbPath,
+	logging: false
+});
 
 /**
  * @typedef {import('moleculer').Context} Context Moleculer's Context
  */
 const DbMixin = {
-	mixins: [MoleculerSequelize],
+	mixins: [DbService],
+	adapter,
 	settings: {
-		force: true,
-		sequelize: new Sequelize(envConfig.database.database, envConfig.database.user, envConfig.database.password, {
-			host: envConfig.database.url,
-			dialect: "mysql",
-			pool: {
-				max: 5,
-				min: 0,
-				idle: 10000
-			},
-			logging: false
-		})
+		force: true
 	},
 	actions: {
-		// listEntities: {
-		// 	cache: true,
-		// 	async handler({params}) {
-		// 		let {page, pageSize, sort, ...request} = params;
-		// 		let query = {};
-		// 		for (let prop in request) {
-		// 			query[prop] = {[Op.like]: `%` + request[prop] + `%`}
-		// 		}
-		// 		return this.broker.call(`${this.fullName}.list`, {
-		// 			page,
-		// 			pageSize,
-		// 			maxPageSize: 100,
-		// 			sort,
-		// 			query: query
-		// 		});
-		// 	}
-		// },
-
-		// CAUTION it will remove all matching rolls!
-		// removeWhere: {
-		// 	params: {
-		// 		where: "object",
-		// 		$$strict: true
-		// 	},
-		// 	async handler({params}) {
-		// 		return this.model.destroy(params.query);
-		// 	}
-		// }
 	},
-
 	events: {
 		"seedDb": {
 			params: {
@@ -68,10 +41,7 @@ const DbMixin = {
 			}
 		}
 	},
-
 	methods: {
-
-		// Method to get all relation methods of a model object.
 		getModelMethods(obj) {
 			let result = [];
 			for (let id in obj) {
@@ -87,7 +57,6 @@ const DbMixin = {
 			return result;
 		}
 	},
-
 	async started() {
 	}
 };

@@ -16,8 +16,8 @@ module.exports = {
 		name: "numberTable",
 		define: {
 			id: {type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true},
-			number: {type: Sequelize.INTEGER, default: false, primaryKey: true},
-			processed: {type: Sequelize.INTEGER, default: false},
+			number: {type: Sequelize.INTEGER, unique: true},
+			processed: {type: Sequelize.INTEGER, defaultValue: 0},
 		},
 	},
 

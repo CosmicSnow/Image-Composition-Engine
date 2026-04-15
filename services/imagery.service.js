@@ -11,8 +11,9 @@ const sharp = require("sharp");
 const fs = require("fs");
 const dir = "./assets/";
 const fontsDir = "./fonts/";
-const allNumbersDir = "../allNumbers";
-const dist = "../dist";
+const distNumbers = "./dist/numbers/";
+const distOutput = "./dist/output/";
+const allNumbersDir = distNumbers;
 
 let fonts = [`${fontsDir}/0.png`, `${fontsDir}/1.png`, `${fontsDir}/2.png`, `${fontsDir}/3.png`, `${fontsDir}/4.png`, `${fontsDir}/5.png`, `${fontsDir}/6.png`, `${fontsDir}/7.png`, `${fontsDir}/8.png`, `${fontsDir}/9.png`];
 let jfg = []; // JIMP FONTS GLOBAL
@@ -24,13 +25,13 @@ module.exports = {
 	model: {
 		name: "imagery",
 		define: {
-			id: {type: Sequelize.INTEGER, primaryKey: true},
-			combination: {type: Sequelize.STRING, primaryKey: true},
-			con1: {type: Sequelize.INTEGER, primaryKey: true},
-			con2: {type: Sequelize.INTEGER, primaryKey: true},
-			con3: {type: Sequelize.INTEGER, primaryKey: true},
-			con4: {type: Sequelize.INTEGER, primaryKey: true},
-			processed: {type: Sequelize.INTEGER},
+			id: {type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true},
+			combination: {type: Sequelize.STRING, unique: true},
+			con1: {type: Sequelize.INTEGER},
+			con2: {type: Sequelize.INTEGER},
+			con3: {type: Sequelize.INTEGER},
+			con4: {type: Sequelize.INTEGER},
+			processed: {type: Sequelize.INTEGER, defaultValue: 0},
 		},
 	},
 
@@ -321,7 +322,7 @@ module.exports = {
 					images.shift();
 					await sharp(first)
 						.composite(images)
-						.toFile(`${dist}/Connected Star - ${imageName}.png`);
+						.toFile(`${distOutput}Connected Star - ${imageName}.png`);
 					dbImage.processed = 2;
 					await ctx.call("imagery.update", dbImage);
 					console.log(dbImage.id, "FINISHED!!!");
@@ -459,7 +460,7 @@ module.exports = {
 					}
 					let text = `background\n${v0}\nshooting star\n${v1}\nstar\n${v2}\neyes\n${v3}\nmouth\n${v4}`;
 					let starNumber = this.makeFourDigits(imageName.id);
-					fs.writeFile(`../aaa/Connected Star - ${starNumber}.txt`, text, function (err, data) {
+					fs.writeFile(`./dist/output/Connected Star - ${starNumber}.txt`, text, function (err, data) {
 						if (err) return console.log(err);
 
 					});

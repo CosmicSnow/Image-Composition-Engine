@@ -27,7 +27,6 @@ const DbMixin = {
 	mixins: [DbService],
 	adapter,
 	settings: {
-		force: true
 	},
 	actions: {
 	},
@@ -42,6 +41,10 @@ const DbMixin = {
 		}
 	},
 	methods: {
+		async insertEntities(entities) {
+			const modelName = this.settings.model?.name || this.name;
+			await this.adapter.db.models[modelName].bulkCreate(entities);
+		},
 		getModelMethods(obj) {
 			let result = [];
 			for (let id in obj) {

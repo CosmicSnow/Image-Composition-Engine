@@ -62,25 +62,17 @@ module.exports = {
 					}
 					layers.push(layerObject);
 				}
+				
+				console.log('DEBUG: layers found:', JSON.stringify(layers.map(l => ({name: l.name, total: l.total}))));
+				
 				for (const layer of layers) {
-					if (maxPossibleCombinations === 0) {
+					if (layer.total > 0 && maxPossibleCombinations === 0) {
 						maxPossibleCombinations = layer.total;
-					} else {
+					} else if (layer.total > 0) {
 						maxPossibleCombinations *= layer.total;
 					}
 				}
-
-
-				// let asd = ["1", "2", "3"];
-				// asd = asd.toString();
-				// asd = asd.split(',');
-				// console.log(layers);
-
-				// for (let i = 1; i <= maxPossibleCombinations; i++) {
-				// 	let combination = [];
-				// 	for ()
-				// }
-
+				
 				let possibleConnections = [];
 
 				if (maxPossibleCombinations > 0) {
@@ -90,13 +82,16 @@ module.exports = {
 						possibleConnections.push(i);
 						possibleConnections.push(i);
 					}
-					let arrays = [];
-					for (const layer of layers) {
+				let arrays = [];
+				for (const layer of layers) {
+					if (layer.total > 0) {
 						arrays.push(layer.files);
 					}
-					let resultArray = this.product(arrays);
+				}
+				
+				let resultArray = this.product(arrays);
 
-					resultArray.forEach((element, index) => {
+				resultArray.forEach((element, index) => {
 						index++;
 						let obj = {
 							id: index,
@@ -165,8 +160,7 @@ module.exports = {
 					}
 				}
 
-				await ctx.call("imagery.insert", {entities: dbObject});
-				// console.log(123, layers);
+				await this.insertEntities(dbObject);
 			}
 		},
 		orderNumber: {
@@ -297,45 +291,54 @@ module.exports = {
 		},
 		createImage: {
 			async handler(ctx) {
-				let dbImage = await this.model.findOne({where: {processed: 0}, raw: true});
-				console.log(dbImage.id, "STARTED");
+				// Use adapter directly to find records
+				const { Op } = require('sequelize');
+				const path = require('path');
+				const model = this.adapter.db.models.imagery;
+				let dbImage = await model.findOne({where: {processed: 0}});
+				
 				if (!dbImage) {
 					console.log("All numbers PROCESSED!");
 					return 0;
-				} else {
-					dbImage.processed = 1;
-					await ctx.call("imagery.update", dbImage);
 				}
-				let imageName = this.makeFourDigits(dbImage.id);
+				
+				const plainImage = dbImage.get({ plain: true });
+				
+				console.log(plainImage.id, "STARTED");
+				
+				plainImage.processed = 1;
+				await model.update(plainImage, {where: {id: plainImage.id}});
+				
+				let imageName = this.makeFourDigits(plainImage.id);
 				let images = [];
-				let combinations = dbImage.combination.split(",");
+				let combinations = plainImage.combination.split(",");
+				
 				try {
-					for (let [index, imageName] of combinations.entries()) {
-						images.push({input: `${dir}/${index}/${imageName}`});
+					for (let [index, imgName] of combinations.entries()) {
+						images.push({input: path.resolve(`${dir}${index}/${imgName}`)});
 					}
 					let first = images[0].input;
-					images.push({input: `${allNumbersDir}/${dbImage.id}.png`, left: 550, top: 100});
-					images.push({input: `${allNumbersDir}/${dbImage.con1}.png`, left: 7850, top: 5500});
-					images.push({input: `${allNumbersDir}/${dbImage.con2}.png`, left: 7850, top: 6700});
-					images.push({input: `${allNumbersDir}/${dbImage.con3}.png`, left: 7850, top: 7900});
-					images.push({input: `${allNumbersDir}/${dbImage.con4}.png`, left: 7850, top: 9100});
+					images.push({input: path.resolve(`${allNumbersDir}${plainImage.id}.png`), left: 550, top: 100});
+					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con1}.png`), left: 7850, top: 5500});
+					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con2}.png`), left: 7850, top: 6700});
+					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con3}.png`), left: 7850, top: 7900});
+					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con4}.png`), left: 7850, top: 9100});
 					images.shift();
 					await sharp(first)
 						.composite(images)
-						.toFile(`${distOutput}Connected Star - ${imageName}.png`);
-					dbImage.processed = 2;
-					await ctx.call("imagery.update", dbImage);
-					console.log(dbImage.id, "FINISHED!!!");
+						.toFile(path.resolve(`${distOutput}Connected Star - ${imageName}.png`));
+					plainImage.processed = 2;
+					await model.update(plainImage, {where: {id: plainImage.id}});
+					console.log(plainImage.id, "FINISHED!!!");
 					return 1;
 
 				} catch (e) {
 					console.log(1122, e);
-					console.log(dbImage.id, "ERROR!!!");
-					dbImage.processed = 0;
-					await ctx.call("imagery.update", dbImage);
+					console.log(plainImage.id, "ERROR!!!");
+					plainImage.processed = 0;
+					await model.update(plainImage, {where: {id: plainImage.id}});
 					return -1;
 				}
-
 			}
 		},
 		createTextDetails: {

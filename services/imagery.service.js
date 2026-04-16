@@ -38,6 +38,14 @@ module.exports = {
 	actions: {
 		readAssets: {
 			async handler(ctx) {
+				// Check if already populated - if so, skip
+				const model = this.adapter.db.models.imagery;
+				const existingCount = await model.count();
+				if (existingCount > 0) {
+					console.log(`DB already has ${existingCount} records, skipping population`);
+					return { count: existingCount };
+				}
+				
 				// layer looks like layer[0] = {name: "1", items [1,2,3], total: x}
 				let layers = [];
 				let totalItems = 0;
@@ -95,6 +103,12 @@ module.exports = {
 				}
 				
 				let resultArray = this.product(arrays);
+				
+				// Shuffle the entire result array for better distribution
+				for (let i = resultArray.length - 1; i > 0; i--) {
+					const j = Math.floor(Math.random() * (i + 1));
+					[resultArray[i], resultArray[j]] = [resultArray[j], resultArray[i]];
+				}
 
 				resultArray.forEach((element, index) => {
 						index++;

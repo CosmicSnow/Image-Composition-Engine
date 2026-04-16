@@ -49,6 +49,24 @@ You can use your own fonts by placing PNG images of 0-9 in the `fonts/` folder.
 
 Images don't need to be square, but **it is recommended that all layers have the same resolution**. Otherwise, the final image may have unexpected behavior (images out of position, cropped, etc.).
 
+### 6. Rescale
+
+The `rescale` action scales images to a percentage of their original size. It works with both:
+- **Folder structure:** Will maintain the folder hierarchy (e.g., `assets/0/` → `output/0/`)
+- **Single folder:** Will process all PNG files directly
+
+Parameters:
+- `sourceDir`: Source folder path
+- `outputDir`: Destination folder path
+- `percentage`: Scale percentage (e.g., 50 = 50% of original, 200 = double size)
+
+Examples:
+- `percentage: 100` → keeps original size
+- `percentage: 50` → reduces to half
+- `percentage: 200` → doubles the size
+
+**Use case:** If your assets are 10K (10000x10000), processing is slow. Scale to 40% for much faster generation, then use the smaller images for testing or quick previews.
+
 ## Install
 
 ```bash

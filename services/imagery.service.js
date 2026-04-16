@@ -4,7 +4,7 @@ const Sequelize = require("sequelize");
 const DbMixin = require("../mixins/db.mixin");
 const {MoleculerClientError} = require("moleculer").Errors;
 
-const {resolve} = require("path");
+const {resolve, path} = require("path");
 const {readdir} = require("fs").promises;
 const jimp = require("jimp");
 const sharp = require("sharp");
@@ -26,7 +26,7 @@ module.exports = {
 		name: "imagery",
 		define: {
 			id: {type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true},
-			combination: {type: Sequelize.STRING, unique: true},
+			combination: {type: Sequelize.STRING(1000), unique: true},
 			con1: {type: Sequelize.INTEGER},
 			con2: {type: Sequelize.INTEGER},
 			con3: {type: Sequelize.INTEGER},
@@ -85,6 +85,11 @@ module.exports = {
 				let arrays = [];
 				for (const layer of layers) {
 					if (layer.total > 0) {
+						// Shuffle files for random mixing
+						for (let i = layer.files.length - 1; i > 0; i--) {
+							const j = Math.floor(Math.random() * (i + 1));
+							[layer.files[i], layer.files[j]] = [layer.files[j], layer.files[i]];
+						}
 						arrays.push(layer.files);
 					}
 				}
@@ -291,7 +296,6 @@ module.exports = {
 		},
 		createImage: {
 			async handler(ctx) {
-				const path = require("path");
 				const fs = require("fs");
 				const { Op } = require("sequelize");
 				const model = this.adapter.db.models.imagery;
@@ -309,7 +313,8 @@ module.exports = {
 				
 				for (const num of requiredNumbers) {
 					if (!num) continue;
-					const numPath = path.resolve(`${allNumbersDir}${num}.png`);
+					let numFileName = this.makeFourDigits(num);
+					const numPath = resolve(process.cwd(), `${allNumbersDir}${numFileName}.png`);
 					if (!fs.existsSync(numPath)) {
 						console.log(`Creating number ${num} first...`);
 						await this.createNumberImageDirect(num);
@@ -325,20 +330,36 @@ module.exports = {
 				let images = [];
 				let combinations = plainImage.combination.split(",");
 				
-				try {
+try {
+					let imageName = this.makeFourDigits(plainImage.id);
+					let combinations = plainImage.combination.split(",");
+					
+					let compositeImages = [];
+					
+					// Asset layers should all be at origin (0,0) - they overlay on top of each other
 					for (let [index, imgName] of combinations.entries()) {
-						images.push({input: path.resolve(`${dir}${index}/${imgName}`)});
+						const imgPath = resolve(process.cwd(), `${dir}${index}/${imgName}`);
+						compositeImages.push({ input: imgPath, left: 0, top: 0 });
 					}
-					let first = images[0].input;
-					images.push({input: path.resolve(`${allNumbersDir}${plainImage.id}.png`), left: 550, top: 100});
-					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con1}.png`), left: 7850, top: 5500});
-					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con2}.png`), left: 7850, top: 6700});
-					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con3}.png`), left: 7850, top: 7900});
-					images.push({input: path.resolve(`${allNumbersDir}${plainImage.con4}.png`), left: 7850, top: 9100});
-					images.shift();
-					await sharp(first)
-						.composite(images)
-						.toFile(path.resolve(`${distOutput}Connected Star - ${imageName}.png`));
+					
+					// Numbers are positioned at specific coordinates
+					const numDir = resolve(process.cwd(), allNumbersDir);
+					compositeImages.push({ input: resolve(numDir, `${imageName}.png`), left: 550, top: 100 });
+					compositeImages.push({ input: resolve(numDir, `${this.makeFourDigits(plainImage.con1)}.png`), left: 7850, top: 5500 });
+					compositeImages.push({ input: resolve(numDir, `${this.makeFourDigits(plainImage.con2)}.png`), left: 7850, top: 6700 });
+					compositeImages.push({ input: resolve(numDir, `${this.makeFourDigits(plainImage.con3)}.png`), left: 7850, top: 7900 });
+					compositeImages.push({ input: resolve(numDir, `${this.makeFourDigits(plainImage.con4)}.png`), left: 7850, top: 9100 });
+					
+					const firstImgPath = resolve(process.cwd(), `${dir}0/${combinations[0]}`);
+					
+					let result = await sharp(firstImgPath).toBuffer();
+					for (let i = 1; i < compositeImages.length; i++) {
+						result = await sharp(result)
+							.composite([compositeImages[i]], { limitInputPixels: false })
+							.toBuffer();
+					}
+					
+					await sharp(result).toFile(resolve(process.cwd(), `${distOutput}Connected Star - ${imageName}.png`));
 					plainImage.processed = 2;
 					await model.update(plainImage, {where: {id: plainImage.id}});
 					console.log(plainImage.id, "FINISHED!!!");
@@ -587,25 +608,27 @@ module.exports = {
 		async createNumberImageDirect(number) {
 			try {
 				let numberToPrint = this.makeFourDigits(number);
-				let firstNumber = Number(numberToPrint.substr(0, 1));
-
-				let jimpNumbers = [];
-				for (let i = 0; i < numberToPrint.length; i++) {
-					let targetNumber = Number(numberToPrint.substr(i, 1));
-					jimpNumbers.push(await jimp.read(fonts[targetNumber]));
-				}
-
+				let digits = numberToPrint.split('').map(Number);
+				
 				let x = 0;
-				x += this.countSpacingX(firstNumber);
-				for (let i = 1; i <= numberToPrint.length - 1; i++) {
-					let targetNumber = Number(numberToPrint.substr(i, 1));
-					await jimpNumbers[0].composite(jimpNumbers[i], x, 0);
-					x += this.countSpacingX(targetNumber);
+				let baseImage = await sharp(fonts[digits[0]]).toBuffer();
+				
+				// Primeiro dígito tem largura 400 ou 500
+				x += digits[0] === 1 ? 400 : 500;
+				
+				for (let i = 1; i < digits.length; i++) {
+					const overlay = await sharp(fonts[digits[i]]).toBuffer();
+					// Offset é a largura do dígito anterior
+					const offset = digits[i-1] === 1 ? 400 : 500;
+					baseImage = await sharp(baseImage)
+						.composite([{ input: overlay, left: x, top: 0 }])
+						.toBuffer();
+					// Atualiza x para o próximo dígito
+					x += digits[i] === 1 ? 400 : 500;
 				}
 				
-				const outputPath = require("path").resolve(`${distNumbers}${number}.png`);
-				await jimpNumbers[0].write(outputPath);
-				console.log(`Number ${number} created: ${outputPath}`);
+				await sharp(baseImage).toFile(resolve(`${distNumbers}${numberToPrint}.png`));
+				console.log(`Number ${number} created`);
 			} catch (e) {
 				console.error(`Error creating number ${number}:`, e.message);
 			}
